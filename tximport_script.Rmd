@@ -1,0 +1,122 @@
+---
+title: "gene count, tpm count and gene length"
+author: "Ismael Gutierrez-Fernandez"
+date: "2025-02-20"
+output: html_document
+---
+
+## Original script by Philippa Borrill (06-03-2018, last updated 22-02-2021), updated with some minor modifications
+
+# AIM: Running combine samples to gene expression level from transcript level
+
+### STEP 0. LOAD THE PACKAGES ###
+
+```{r}
+# Run this chunk ONLY if the packages are not already installed  
+
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install(version = "3.18") # This installs version 3.18 of BiocManager that works on R version 4.3.2; for new versions change "version=" or check the source webpage: https://bioconductor.org/install/
+
+BiocManager::install("tximportData")
+BiocManager::install("tximport")
+BiocManager::install("rhdf5")
+```
+
+```{r}
+# Load packages needed for tximport
+
+library(readr)
+library(tximportData)
+library(tximport)
+library(rhdf5)
+```
+
+
+### STEP 1. SET THE DIRECTORIES AND PATHS FOR INPUT FILES ###
+
+```{r}
+# READ IN PRE-CONSTRUCTED TX2GENE TABLE (TRANSCRIPT TO GENE TABLE)
+
+setwd("//jic-hpc-data/Group-Scratch/Philippa-Borrill/References/iwgsc_ref_seq_1.1/iwgsc_refseqv1.1_genes_2017July06/") # Move to the directory where the transcriptome reference is stored
+
+tx2gene <- read_csv("transcript_to_gene_refseqv1.1.csv") # Load the .csv file with the transcriptome.
+head(tx2gene)
+
+```
+
+```{r}
+# MAKE A VECTOR POINTING THE KALLISTO RESULTS FILES
+
+setwd("//jic-hpc-data/HPC-Home/rna-training/R/") # Pathway to the directory where input list (.txt) is stored
+samples <- read.table("examples_inputs_treatment.txt", header = F) # Load the list of the samples. In the input file (.txt): first column ("V1") is treatment directory where kallisto results where saved; second column (V2) sample directory that kallisto generated for each sample. It could be customized, depends on the directory hierarchy.
+samples
+#colnames(samples) <-c("sample")
+
+```
+
+### STEP 2. SUMMARISE COUNTS PER GENE AND TPM PER GENE (RATHER THAN TRANSCRIPT) USING TXIMPORT ###
+
+```{r}
+# SET THE INPUT OF SAMPLE FILES
+
+setwd("//jic-hpc-data/HPC-Home/rna-training/kallisto/results/") # Pathway to the directory where kallisto files are stored
+files <- file.path(samples$V1, samples$V2, "abundance.tsv", fsep = "/") # Creates the path to each file. By default kallisto output generates a file called "abundance.tsv" for each sample.
+files
+names(files) <- paste0(samples$V2)
+head(files)
+all(file.exists(files)) # Should be TRUE, if FALSE something is missing
+
+# READING THE FILES AND SUM PER GENE. Needs "all(file.exists(files))" being TRUE. Important!!: run "all(file.exists(files))" and tximport inside the same chunk
+
+txi <- tximport(files, type = "kallisto", tx2gene = tx2gene)
+names(txi)
+```
+
+```{r}
+# See the analysis results
+
+# 1. Counts summarised per gene
+head(txi$counts)
+colnames(txi$counts)
+View(txi$counts)
+
+# 2. Tpm summarised per gene
+head(txi$abundance)
+colnames(txi$abundance)
+View(txi$abundance)
+```
+
+```{r}
+# SAVE THE TXIMPORT RESULTS
+
+setwd("//jic-hpc-data/HPC-Home/rna-training/R/tximport") # Move to the directory where the analysis will be saved
+
+write.table(txi$counts, file="treatment_training_counts.tsv",sep = "\t") # Save the counts per gene. file = file name, ended with .tsv extension; "\t" = to be separated by tabulation
+
+write.table(txi$abundance, file="treatment_training_tpm.tsv",sep = "\t") # Save the tpm per gene
+```
+
+### STEP 3. SUMMARISE LENGHT PER GENE ###
+
+```{r}
+# See lengths summarised per gene
+
+head(txi$length)
+View(txi$length)
+```
+
+```{r}
+# CALCULATE AVERAGE GENE LENGTH ACROSS ALL SAMPLES
+
+gene_lengths <- as.data.frame(rowMeans(txi$length))
+head(gene_lengths)
+colnames(gene_lengths) <- c("length")
+head(gene_lengths)
+View(gene_lengths)
+
+# SAVE LENGTH PER GENE RESULTS
+setwd("//jic-hpc-data/HPC-Home/rna-training/R/tximport")
+write.csv(gene_lengths, file = "treatment_training_gene_length.csv")
+
+```
