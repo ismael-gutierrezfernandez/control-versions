@@ -1,0 +1,271 @@
+---
+title: "GO enrichment visualization"
+author: "Ismael Gutierrez-Fernandez"
+date: "2025-03-27"
+output: html_document
+---
+
+### The aim of this script is to plot the results of the GO term enrichement (with goseq) from the saved files. The dotplots are designed to have as much information as possible.
+
+```{r setup, include=FALSE}
+# Install packages. Only run the first time if needed.
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("ggpubr")
+```
+
+```{r}
+# Load packages
+library(ggplot2)
+library(RColorBrewer)
+library(ggpubr)
+library(dplyr)
+library(forcats)
+```
+
+
+# Import the files from GO term enrichment at certain padj range
+
+```{r}
+# Define the path where the GO term results from goseq are saved
+data_dir <- "//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/DESeq2/HT41x2_water_deficits/GO_enrichment/"
+
+# Import up-regulated GO terms in LWD vs WW conditions.
+GOterm.up_LWD <- read.csv(file=paste0(data_dir,"HT41_LWD_vs_WW_results_upreg2fold_0.01_GOseq.tsv"), sep = "\t")
+dim(GOterm.up_LWD)
+
+# Import down-regulated GO terms in LWD vs WW conditions.
+GOterm.down_LWD <- read.csv(file=paste0(data_dir,"HT41_LWD_vs_WW_results_downreg2fold_0.01_GOseq.tsv"), sep = "\t")
+dim(GOterm.down_LWD)
+
+##################################################################################################################
+
+# Import up-regulated GO terms in TWD vs WW conditions.
+GOterm.up_TWD <- read.csv(file=paste0(data_dir,"HT41_TWD_vs_WW_results_upreg2fold_0.01_GOseq.tsv"), sep = "\t")
+dim(GOterm.up_TWD)
+
+# Import down-regulated GO terms in TWD vs WW conditions.
+GOterm.down_TWD <- read.csv(file=paste0(data_dir,"HT41_TWD_vs_WW_results_downreg2fold_0.01_GOseq.tsv"), sep = "\t")
+dim(GOterm.down_TWD)
+
+```
+
+## PLOTS OF LONG WATER DEFICIT (LWD) VS WW CONDITIONS.
+
+### UP-REGULATED
+
+```{r}
+# Select the GO terms based on their ontology: biological process (BP), molecular function (MF), and cellular components (CC). For the aim of the study, I focus on BP and MF.
+
+GOterm.up_LWD_BP <-  filter(GOterm.up_LWD, GOterm.up_LWD$ontology %in% c("BP"))
+dim(GOterm.up_LWD_BP)
+
+GOterm.up_LWD_MF <-  filter(GOterm.up_LWD, GOterm.up_LWD$ontology %in% c("MF"))
+dim(GOterm.up_LWD_MF)
+
+# Plot the dot plots with each subset
+# 1. Biological processes
+
+GOterm.up_LWD_BP %>%
+  top_n(20, wt = -over_represented_pvalue) %>%  # Select the top20 GO term with highest significance (lowest over_represented_pvalue)
+  mutate(hitsPerc = numDEInCat*100/numInCat) %>% # Calculate the ratio of counted DEGs for that GO term and all genes associated to that GO term.
+  mutate(term = fct_reorder(term, desc(over_represented_pvalue))) %>% # Reorder the GO terms in order to appear in descendant order based on lowaest p-value
+  ggplot(aes(x = hitsPerc, # Variable in X axis
+             y = term, # Variable in Y axis
+             colour = -over_represented_pvalue, # Variable that define color scale
+             size = numDEInCat)) + # Variable that define dots size
+  geom_point(stroke = 2) + # Dotplot
+  geom_segment(aes(xend = 0, yend = term), linewidth = 0.5, linetype = 2) + # To add the segment lined the dot with each GO term
+  expand_limits(x=0) +
+  labs(x = "Gene ratio (%)", y = "GO term", colour = "p-value", size = "Count") + # Define the name of the axis and the colour and size legends
+  ggtitle("Biological process, up-regulated in HT41 under LWD") + # Title of the plot
+  scale_color_gradient(low = "#e69394", high = "#780002", space = "Lab") + # Define the colour scale
+  theme_bw() + # White background and more aesthetic
+  theme(axis.text.x = element_text(size=rel(1.15)), 
+        axis.title = element_text(size=rel(1.15))) + # Define the size of the axis title
+  scale_x_continuous(limits = c(0, 100)) # Modify the values showed in the axis X that could be adjusted for each GO term plot
+
+
+# 2. Molecular function
+GOterm.up_LWD_MF %>%
+  top_n(20, wt = -over_represented_pvalue) %>% 
+  mutate(hitsPerc = numDEInCat*100/numInCat) %>%
+  mutate(term = fct_reorder(term, desc(over_represented_pvalue))) %>%
+  ggplot(aes(x = hitsPerc, 
+             y = term, 
+             colour = -over_represented_pvalue, 
+             size = numDEInCat)) +
+  geom_point(stroke = 2) +
+  geom_segment(aes(xend = 0, yend = term), linewidth = 0.5, linetype = 2) +
+  expand_limits(x=0) +
+  labs(x = "Gene ratio (%)", y = "GO term", colour = "p-value", size = "Count") +
+  ggtitle("Molecular function, up-regulated in HT41 under LWD") +
+  scale_color_gradient(low = "#e69394", high = "#780002", space = "Lab") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=rel(1.15)),
+        axis.title = element_text(size=rel(1.15))) +
+  scale_x_continuous(limits = c(0, 100))
+
+```
+
+### DOWN-REGULATED
+
+```{r}
+# Select the GO terms based on their ontology: biological process (BP), molecular function (MF), and cellular components (CC). For the aim of the study, I focus on BP and MF.
+GOterm.down_LWD_BP <-  filter(GOterm.down_LWD, GOterm.down_LWD$ontology %in% c("BP"))
+dim(GOterm.down_LWD_BP)
+
+GOterm.down_LWD_MF <-  filter(GOterm.down_LWD, GOterm.down_LWD$ontology %in% c("MF"))
+dim(GOterm.down_LWD_MF)
+
+# Plot the dot plots with each subset
+# 1. Biological processes
+GOterm.down_LWD_BP %>%
+  top_n(20, wt = -over_represented_pvalue) %>% 
+  mutate(hitsPerc = numDEInCat*100/numInCat) %>%
+  mutate(term = fct_reorder(term, desc(over_represented_pvalue))) %>%
+  ggplot(aes(x = hitsPerc, 
+             y = term, 
+             colour = -over_represented_pvalue, 
+             size = numDEInCat)) +
+  geom_point(stroke = 2) +
+  geom_segment(aes(xend = 0, yend = term), linewidth = 0.5, linetype = 2) +
+  expand_limits(x=0) +
+  labs(x = "Gene ratio (%)", y = "GO term", colour = "p-value", size = "Count") +
+  ggtitle("Biological proccess, down-regulated in HT41 under LWD") +
+  scale_color_gradient(low = "#add2ff", high = "#0a63cf", space = "Lab") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=rel(1.15)),
+        axis.title = element_text(size=rel(1.15))) +
+  scale_x_continuous(limits = c(0, 100))
+
+# 2. Molecular function
+GOterm.down_LWD_MF %>%
+  top_n(20, wt = -over_represented_pvalue) %>% 
+  mutate(hitsPerc = numDEInCat*100/numInCat) %>%
+  mutate(term = fct_reorder(term, desc(over_represented_pvalue))) %>%
+  ggplot(aes(x = hitsPerc, 
+             y = term, 
+             colour = -over_represented_pvalue, 
+             size = numDEInCat)) +
+  geom_point(stroke = 2) +
+  geom_segment(aes(xend = 0, yend = term), linewidth = 0.5, linetype = 2) +
+  expand_limits(x=0) +
+  labs(x = "Gene ratio (%)", y = "GO term", colour = "p-value", size = "Count") +
+  ggtitle("Molecular function, down-regulated in HT41 under LWD") +
+  scale_color_gradient(low = "#add2ff", high = "#0a63cf", space = "Lab") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=rel(1.15)),
+        axis.title = element_text(size=rel(1.15))) +
+  scale_x_continuous(limits = c(0, 100))
+
+```
+
+
+## PLOTS OF TERMINAL WATER DEFICIT (TWD) VS WW CONDITIONS.
+
+### UP-REGULATED
+
+```{r}
+# Select the GO terms based on their ontology: biological process (BP), molecular function (MF), and cellular components (CC). For the aim of the study, I focus on BP and MF.
+
+GOterm.up_TWD_BP <-  filter(GOterm.up_TWD, GOterm.up_TWD$ontology %in% c("BP"))
+dim(GOterm.up_TWD_BP)
+
+GOterm.up_TWD_MF <-  filter(GOterm.up_TWD, GOterm.up_TWD$ontology %in% c("MF"))
+dim(GOterm.up_TWD_MF)
+
+# Plot the dot plots with each subset
+# 1. Biological processes
+
+GOterm.up_TWD_BP %>%
+  top_n(20, wt = -over_represented_pvalue) %>% 
+  mutate(hitsPerc = numDEInCat*100/numInCat) %>%
+  mutate(term = fct_reorder(term, desc(over_represented_pvalue))) %>%
+  ggplot(aes(x = hitsPerc, 
+             y = term, 
+             colour = -over_represented_pvalue, 
+             size = numDEInCat)) +
+  geom_point(stroke = 2) +
+  geom_segment(aes(xend = 0, yend = term), linewidth = 0.5, linetype = 2) +
+  expand_limits(x=0) +
+  labs(x = "Gene ratio (%)", y = "GO term", colour = "p-value", size = "Count") +
+  ggtitle("Biological proccess, up-regulated in HT41 under TWD") +
+  scale_color_gradient(low = "#e69394", high = "#780002", space = "Lab") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=rel(1.15)),
+        axis.title = element_text(size=rel(1.15))) +
+  scale_x_continuous(limits = c(0, 100))
+
+
+# 2. Molecular function
+GOterm.up_TWD_MF %>%
+  top_n(20, wt = -over_represented_pvalue) %>% 
+  mutate(hitsPerc = numDEInCat*100/numInCat) %>%
+  mutate(term = fct_reorder(term, desc(over_represented_pvalue))) %>%
+  ggplot(aes(x = hitsPerc, 
+             y = term, 
+             colour = -over_represented_pvalue, 
+             size = numDEInCat)) +
+  geom_point(stroke = 2) +
+  geom_segment(aes(xend = 0, yend = term), linewidth = 0.5, linetype = 2) +
+  expand_limits(x=0) +
+  labs(x = "Gene ratio (%)", y = "GO term", colour = "p-value", size = "Count") +
+  ggtitle("Molecular function, up-regulated in HT41 under TWD") +
+  scale_color_gradient(low = "#e69394", high = "#780002", space = "Lab") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=rel(1.15)),
+        axis.title = element_text(size=rel(1.15))) +
+  scale_x_continuous(limits = c(0, 100))
+```
+
+### DOWN-REGULATED
+
+```{r}
+# Select the GO terms based on their ontology: biological process (BP), molecular function (MF), and cellular components (CC). For the aim of the study, I focus on BP and MF.
+GOterm.down_TWD_BP <-  filter(GOterm.down_TWD, GOterm.down_TWD$ontology %in% c("BP"))
+dim(GOterm.down_TWD_BP)
+
+GOterm.down_TWD_MF <-  filter(GOterm.down_TWD, GOterm.down_TWD$ontology %in% c("MF"))
+dim(GOterm.down_TWD_MF)
+
+# Plot the dot plots with each subset
+# 1. Biological processes
+GOterm.down_TWD_BP %>%
+  top_n(20, wt = -over_represented_pvalue) %>% 
+  mutate(hitsPerc = numDEInCat*100/numInCat) %>%
+  mutate(term = fct_reorder(term, desc(over_represented_pvalue))) %>%
+  ggplot(aes(x = hitsPerc, 
+             y = term, 
+             colour = -over_represented_pvalue, 
+             size = numDEInCat)) +
+  geom_point(stroke = 2) +
+  geom_segment(aes(xend = 0, yend = term), linewidth = 0.5, linetype = 2) +
+  expand_limits(x=0) +
+  labs(x = "Gene ratio (%)", y = "GO term", colour = "p-value", size = "Count") +
+  ggtitle("Biological proccess, down-regulated in HT41 under TWD") +
+  scale_color_gradient(low = "#add2ff", high = "#0a63cf", space = "Lab") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=rel(1.15)),
+        axis.title = element_text(size=rel(1.15))) +
+  scale_x_continuous(limits = c(0, 100))
+
+# 2. Molecular function
+GOterm.down_TWD_MF %>%
+  top_n(20, wt = -over_represented_pvalue) %>% 
+  mutate(hitsPerc = numDEInCat*100/numInCat) %>%
+  mutate(term = fct_reorder(term, desc(over_represented_pvalue))) %>%
+  ggplot(aes(x = hitsPerc, 
+             y = term, 
+             colour = -over_represented_pvalue, 
+             size = numDEInCat)) +
+  geom_point(stroke = 2) +
+  geom_segment(aes(xend = 0, yend = term), linewidth = 0.5, linetype = 2) +
+  expand_limits(x=0) +
+  labs(x = "Gene ratio (%)", y = "GO term", colour = "p-value", size = "Count") +
+  ggtitle("Molecular function, down-regulated in HT41 under TWD") +
+  scale_color_gradient(low = "#add2ff", high = "#0a63cf", space = "Lab") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=rel(1.15)),
+        axis.title = element_text(size=rel(1.15))) +
+  scale_x_continuous(limits = c(0, 100))
+```

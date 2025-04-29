@@ -1,0 +1,320 @@
+---
+title: "Untitled"
+author: "Ismael Gutierrez-Fernandez"
+date: "2025-04-25"
+output: html_document
+---
+
+## This script plots UpSet figures for shown the number of DEG that are commonly or not expressed for each genotype x water deficit.
+
+```{r}
+# Install the package ComplexHeatMap (Bioconductor v 3.20) if needed. Only the first time.
+BiocManager::install("ComplexHeatmap")
+
+```
+
+```{r}
+# Load the packages
+library(ComplexHeatmap)
+library(readr)
+```
+
+```{r}
+# Load the DESeq2 output for each contrast. I start from the output object that in the DESeq2 was called .na.rm (without NA) so it must be run at the same time than DESeq2 script. For the moment I could not do it from the saved output. Adapt name in (name).na.rm to that given in the DESeq2 script
+
+# 1. Genotype HT41
+HT41_LWD <- get(paste("HT41_WW_LWD.na.rm",sep="")) # LWD vs WW
+HT41_TWD <- get(paste("HT41_WW_TWD.na.rm",sep="")) # TWD vs WW
+
+# 2. Genotype Gazul
+GAZUL_LWD <- get(paste("GAZUL_WW_LWD.na.rm",sep="")) # LWD vs WW
+GAZUL_TWD <- get(paste("GAZUL_WW_TWD.na.rm",sep="")) # TWD vs WW
+```
+
+## Comparison only GAZUL under the two water deficits
+
+### UP-REGULATED DEG
+
+```{r}
+# Create a list of "sets" for up-regulated DEG. Each sets is a vector of the names of the DEG at certain padj and log2fold > 1. The padj and the Log2FoldChange values could be changed
+
+lt = list(GAZULxLWD = c(rownames(GAZUL_LWD[GAZUL_LWD$padj < 0.05 & GAZUL_LWD$log2FoldChange > 1,])),
+          GAZULxTWD = c(rownames(GAZUL_TWD[GAZUL_TWD$padj < 0.05 & GAZUL_TWD$log2FoldChange > 1,])))
+
+matrix <- list_to_matrix(lt) # This function transform the list of sets into a binary matrix.
+
+# Calculate the number of combination of each sets. We select the mode distinct because we want the unique numbers sharing or no by the sets. For more information consult the manual
+m <- make_comb_mat(matrix, mode = "distinct")
+set_name(m)
+cs <- comb_size(m)
+ss <- set_size(m)
+comb_degree(m)
+comb_name(m)
+
+# Plot the UpSet 
+UpSet(m, set_order = c("GAZULxLWD", "GAZULxTWD"), pt_size = unit(5, "mm"),
+      lwd = 3, bg_col = c("#e3e3e3"), bg_pt_col = "#d4d4d4",
+      comb_col = c("black", "darkcyan")[comb_degree(m)],
+      top_annotation = HeatmapAnnotation("Diff. expressed genes" = anno_barplot(
+        cs, 
+        ylim = c(0, max(cs)*1.1),
+        border = TRUE, 
+        gp = gpar(fill = c("black", "darkcyan")[comb_degree(m)]), 
+        height = unit(5, "cm"),
+        add_numbers = TRUE,
+        numbers_gp = gpar(fontsize = 10)),
+      annotation_name_side = "left", 
+      annotation_name_rot = 90),
+      right_annotation = HeatmapAnnotation(
+        which = "row",
+        "Total DEG" = anno_barplot(
+          ss, 
+          ylim = c(0, max(ss)*1.1),
+          border = TRUE, 
+          gp = gpar(fill = "grey"), 
+          width = unit(5, "cm"),
+          add_numbers = TRUE,
+          numbers_gp = gpar(fontsize = 10))),
+      column_title = "Common up-regulated DEGs in Gazul under the two water deficits"
+        )
+
+```
+
+### DOWN-REGULATED DEG
+
+```{r}
+# Create a list of "sets" for down-regulated DEG. Each sets is a vector of the names of the DEG at certain padj and log2fold < -1. The padj and the Log2FoldChange values could be changed
+
+lt = list(GAZULxLWD = c(rownames(GAZUL_LWD[GAZUL_LWD$padj < 0.05 & GAZUL_LWD$log2FoldChange < -1,])),
+          GAZULxTWD = c(rownames(GAZUL_TWD[GAZUL_TWD$padj < 0.05 & GAZUL_TWD$log2FoldChange < -1,])))
+
+matrix <- list_to_matrix(lt) # This function transform the list of sets into a binary matrix.
+
+# Calculate the number of combination of each sets. We select the mode distinct because we want the unique numbers sharing or no by the sets. For more information consult the manual
+m <- make_comb_mat(matrix, mode = "distinct")
+set_name(m)
+cs <- comb_size(m)
+ss <- set_size(m)
+comb_degree(m)
+comb_name(m)
+
+# Plot the UpSet
+UpSet(m, set_order = c("GAZULxLWD", "GAZULxTWD"), pt_size = unit(5, "mm"),
+      lwd = 3, bg_col = c("#e3e3e3"), bg_pt_col = "#d4d4d4",
+      comb_col = c("black", "#b35488")[comb_degree(m)],
+      top_annotation = HeatmapAnnotation("Diff. expressed genes" = anno_barplot(
+        cs, 
+        ylim = c(0, max(cs)*1.1),
+        border = TRUE, 
+        gp = gpar(fill = c("black", "#b35488")[comb_degree(m)]), 
+        height = unit(5, "cm"),
+        add_numbers = TRUE,
+        numbers_gp = gpar(fontsize = 10)),
+        annotation_name_side = "left", 
+        annotation_name_rot = 90),
+      right_annotation = HeatmapAnnotation(
+        which = "row",
+        "Total DEG" = anno_barplot(
+          ss, 
+          ylim = c(0, max(ss)*1.1),
+          border = TRUE, 
+          gp = gpar(fill = "grey"), 
+          width = unit(5, "cm"),
+          add_numbers = TRUE,
+          numbers_gp = gpar(fontsize = 10))),
+      column_title = "Common down-regulated DEGs in Gazul under the two water deficits")
+```
+
+
+## Comparison only HT41 under the two water deficits
+
+### UP-REGULATED DEG
+
+```{r}
+# Create a list of "sets" for up-regulated DEG. Each sets is a vector of the names of the DEG at certain padj and log2fold > 1. The padj and the Log2FoldChange values could be changed
+
+lt = list(HT41xLWD = c(rownames(HT41_LWD[HT41_LWD$padj < 0.05 & HT41_LWD$log2FoldChange > 1,])),
+          HT41xTWD = c(rownames(HT41_TWD[HT41_TWD$padj < 0.05 & HT41_TWD$log2FoldChange > 1,])))
+
+matrix <- list_to_matrix(lt) # This function transform the list of sets into a binary matrix.
+
+# Calculate the number of combination of each sets. We select the mode distinct because we want the unique numbers sharing or no by the sets. For more information consult the manual
+m <- make_comb_mat(matrix, mode = "distinct")
+set_name(m)
+cs <- comb_size(m)
+ss <- set_size(m)
+comb_degree(m)
+comb_name(m)
+
+# Plot the UpSet 
+UpSet(m, set_order = c("HT41xLWD", "HT41xTWD"), pt_size = unit(5, "mm"),
+      lwd = 3, bg_col = c("#e3e3e3"), bg_pt_col = "#d4d4d4",
+      comb_col = c("black", "darkcyan")[comb_degree(m)],
+      top_annotation = HeatmapAnnotation("Diff. expressed genes" = anno_barplot(
+        cs, 
+        ylim = c(0, max(cs)*1.1),
+        border = TRUE, 
+        gp = gpar(fill = c("black", "darkcyan")[comb_degree(m)]), 
+        height = unit(5, "cm"),
+        add_numbers = TRUE,
+        numbers_gp = gpar(fontsize = 10)),
+      annotation_name_side = "left", 
+      annotation_name_rot = 90),
+      right_annotation = HeatmapAnnotation(
+        which = "row",
+        "Total DEG" = anno_barplot(
+          ss, 
+          ylim = c(0, max(ss)*1.1),
+          border = TRUE, 
+          gp = gpar(fill = "grey"), 
+          width = unit(5, "cm"),
+          add_numbers = TRUE,
+          numbers_gp = gpar(fontsize = 10))),
+      column_title = "Common up-regulated DEGs in HT41 under the two water deficits"
+        )
+
+```
+
+### DOWN-REGULATED DEG
+
+```{r}
+# Create a list of "sets" for down-regulated DEG. Each sets is a vector of the names of the DEG at certain padj and log2fold < -1. The padj and the Log2FoldChange values could be changed
+
+lt = list(HT41xLWD = c(rownames(HT41_LWD[HT41_LWD$padj < 0.05 & HT41_LWD$log2FoldChange < -1,])),
+          HT41xTWD = c(rownames(HT41_TWD[HT41_TWD$padj < 0.05 & HT41_TWD$log2FoldChange < -1,])))
+
+matrix <- list_to_matrix(lt) # This function transform the list of sets into a binary matrix.
+
+# Calculate the number of combination of each sets. We select the mode distinct because we want the unique numbers sharing or no by the sets. For more information consult the manual
+m <- make_comb_mat(matrix, mode = "distinct")
+set_name(m)
+cs <- comb_size(m)
+ss <- set_size(m)
+comb_degree(m)
+comb_name(m)
+
+# Plot the UpSet
+UpSet(m, set_order = c("HT41xLWD", "HT41xTWD"), pt_size = unit(5, "mm"),
+      lwd = 3, bg_col = c("#e3e3e3"), bg_pt_col = "#d4d4d4",
+      comb_col = c("black", "#b35488")[comb_degree(m)],
+      top_annotation = HeatmapAnnotation("Diff. expressed genes" = anno_barplot(
+        cs, 
+        ylim = c(0, max(cs)*1.1),
+        border = TRUE, 
+        gp = gpar(fill = c("black", "#b35488")[comb_degree(m)]), 
+        height = unit(5, "cm"),
+        add_numbers = TRUE,
+        numbers_gp = gpar(fontsize = 10)),
+        annotation_name_side = "left", 
+        annotation_name_rot = 90),
+      right_annotation = HeatmapAnnotation(
+        which = "row",
+        "Total DEG" = anno_barplot(
+          ss, 
+          ylim = c(0, max(ss)*1.1),
+          border = TRUE, 
+          gp = gpar(fill = "grey"), 
+          width = unit(5, "cm"),
+          add_numbers = TRUE,
+          numbers_gp = gpar(fontsize = 10))),
+      column_title = "Common down-regulated DEGs in HT41 under the two water deficits")
+```
+
+
+## Comparison among the two genotypes under the two water deficits (work in pogress)
+
+### UP-REGULATED DEG
+
+```{r}
+# Create a list of "sets" for up-regulated DEG. Each sets is a vector of the names of the DEG at certain padj and log2fold > 1. The padj and the Log2FoldChange values could be changed
+
+lt = list(HT41xLWD = c(rownames(HT41_LWD[HT41_LWD$padj < 0.05 & HT41_LWD$log2FoldChange > 1,])),
+          HT41xTWD = c(rownames(HT41_TWD[HT41_TWD$padj < 0.05 & HT41_TWD$log2FoldChange > 1,])),
+          GAZULxLWD = c(rownames(GAZUL_LWD[GAZUL_LWD$padj < 0.05 & GAZUL_LWD$log2FoldChange > 1,])),
+          GAZULxTWD = c(rownames(GAZUL_TWD[GAZUL_TWD$padj < 0.05 & GAZUL_TWD$log2FoldChange > 1,])))
+
+matrix <- list_to_matrix(lt) # This function transform the list of sets into a binary matrix.
+
+# Calculate the number of combination of each sets. We select the mode distinct because we want the unique numbers sharing or no by the sets. For more information consult the manual
+m <- make_comb_mat(matrix, mode = "distinct")
+set_name(m)
+cs <- comb_size(m)
+ss <- set_size(m)
+comb_degree(m)
+comb_name(m)
+
+# Plot the UpSet 
+UpSet(m, set_order = c("HT41xLWD", "HT41xTWD", "GAZULxLWD", "GAZULxTWD"), pt_size = unit(5, "mm"),
+      lwd = 3, bg_col = c("#e3e3e3"), bg_pt_col = "#d4d4d4",
+      comb_col = c("black", "darkcyan", "#b35488", "#c2c217")[comb_degree(m)],
+      top_annotation = HeatmapAnnotation("Diff. expressed genes" = anno_barplot(
+        cs, 
+        ylim = c(0, max(cs)*1.1),
+        border = TRUE, 
+        gp = gpar(fill = c("black", "darkcyan", "#b35488", "#c2c217")[comb_degree(m)]), 
+        height = unit(5, "cm"),
+        add_numbers = TRUE,
+        numbers_gp = gpar(fontsize = 10)),
+      annotation_name_side = "left", 
+      annotation_name_rot = 90),
+      right_annotation = HeatmapAnnotation(
+        which = "row",
+        "Total DEG" = anno_barplot(
+          ss, 
+          ylim = c(0, max(ss)*1.1),
+          border = TRUE, 
+          gp = gpar(fill = "grey"), 
+          width = unit(5, "cm"),
+          add_numbers = TRUE,
+          numbers_gp = gpar(fontsize = 10))),
+      column_title = "Common up-regulated DEGs among Gazul and HT41 under the two water deficits"
+        )
+
+```
+
+### DOWN-REGULATED DEG
+
+```{r}
+# Create a list of "sets" for down-regulated DEG. Each sets is a vector of the names of the DEG at certain padj and log2fold < -1. The padj and the Log2FoldChange values could be changed
+
+lt = list(HT41xLWD = c(rownames(HT41_LWD[HT41_LWD$padj < 0.05 & HT41_LWD$log2FoldChange < -1,])),
+          HT41xTWD = c(rownames(HT41_TWD[HT41_TWD$padj < 0.05 & HT41_TWD$log2FoldChange < -1,])),
+          GAZULxLWD = c(rownames(GAZUL_LWD[GAZUL_LWD$padj < 0.05 & GAZUL_LWD$log2FoldChange < -1,])),
+          GAZULxTWD = c(rownames(GAZUL_TWD[GAZUL_TWD$padj < 0.05 & GAZUL_TWD$log2FoldChange < -1,])))
+
+matrix <- list_to_matrix(lt) # This function transform the list of sets into a binary matrix.
+
+# Calculate the number of combination of each sets. We select the mode distinct because we want the unique numbers sharing or no by the sets. For more information consult the manual
+m <- make_comb_mat(matrix, mode = "distinct")
+set_name(m)
+cs <- comb_size(m)
+ss <- set_size(m)
+comb_degree(m)
+comb_name(m)
+
+# Plot the UpSet
+UpSet(m, set_order = c("HT41xLWD", "HT41xTWD", "GAZULxLWD", "GAZULxTWD"), pt_size = unit(5, "mm"),
+      lwd = 3, bg_col = c("#e3e3e3"), bg_pt_col = "#d4d4d4",
+      comb_col = c("black", "darkcyan", "#b35488", "#c2c217")[comb_degree(m)],
+      top_annotation = HeatmapAnnotation("Diff. expressed genes" = anno_barplot(
+        cs, 
+        ylim = c(0, max(cs)*1.1),
+        border = TRUE, 
+        gp = gpar(fill = c("black", "darkcyan", "#b35488", "#c2c217")[comb_degree(m)]), 
+        height = unit(5, "cm"),
+        add_numbers = TRUE,
+        numbers_gp = gpar(fontsize = 10)),
+        annotation_name_side = "left", 
+        annotation_name_rot = 90),
+      right_annotation = HeatmapAnnotation(
+        which = "row",
+        "Total DEG" = anno_barplot(
+          ss, 
+          ylim = c(0, max(ss)*1.1),
+          border = TRUE, 
+          gp = gpar(fill = "grey"), 
+          width = unit(5, "cm"),
+          add_numbers = TRUE,
+          numbers_gp = gpar(fontsize = 10))),
+      column_title = "Common down-regulated DEGs among Gazul and HT41 under the two water deficits")
+```

@@ -1,0 +1,857 @@
+---
+title: "DESeq2 and GOSeq"
+author: "Ismael Gutierrez-Fernandez"
+date: "2025-02-21"
+output: html_document
+---
+
+## Original script by Philippa Borrill (8.21.2018, last updated 13.6.2022), with some minor modifications by Ismael Gutierrez-Fernandez
+
+# AIM: RUN DESeq2 FOR COMPARING GENE EXPRESSION "control" vs "Treatment"
+
+## STEP 0. Install and load the packages. Define directories and import the data
+
+```{r}
+# 0.1. Install. Run ONLY if the packages are not previously installed
+
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install(version = "3.20") # This installs version 3.18 of BiocManager that works on R version 4.3.2; for new versions change "version=" or check the source webpage: https://bioconductor.org/install/
+
+BiocManager::install("DESeq2")
+BiocManager::install("goseq")
+BiocManager::install("apeglm")
+BiocManager::install("ashr")
+install.packages("reshape")
+install.packages("pheatmap")
+```
+
+```{r}
+# 0.2. Load packages for this script.
+
+library(DESeq2)
+library(goseq)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(reshape)
+library(apeglm)
+library(ashr)
+library(pheatmap)
+```
+
+```{r}
+# 0.3. Define paths
+
+data_dir <- "//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/tximport/" # Define the path for the directory where the tximport results are placed
+
+out_dir_DESeq2 <- "//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/DESeq2/GAZULx2_water_deficits/" # Define the path for the directory where DESeq2 results will be saved
+
+
+out_dir_GO <- "//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/DESeq2/GAZULx2_water_deficits/GO_enrichment/" # Define the path for the directory where GO term enrichment results will be saved
+
+data_dir_WW <- "//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/tximport/GAZUL_WW/"
+
+data_dir_LWD <- "//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/tximport/GAZUL_LWD/"
+
+data_dir_TWD <- "//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/tximport/GAZUL_TWD/"
+
+```
+
+```{r}
+# 0.4. Import the input files for the analysis
+
+GAZUL_WW.tpm.data <- read.csv(file=paste0(data_dir_WW,"GAZUL_WW_tpm.tsv"), sep = "\t")
+head(GAZUL_WW.tpm.data)
+
+GAZUL_LWD.tpm.data <- read.csv(file=paste0(data_dir_LWD,"GAZUL_LWD_tpm.tsv"), sep = "\t")
+head(GAZUL_LWD.tpm.data)
+
+GAZUL_TWD.tpm.data <- read.csv(file=paste0(data_dir_TWD,"GAZUL_TWD_tpm.tsv"), sep = "\t")
+head(GAZUL_TWD.tpm.data)
+```
+
+
+## STEP 1. FOR EACH CONDITION/TREATMENT WE FILTER THE EXPRESSED GENES BASED ON THE TPM IN ORDER TO SEE ONLY THE DIFFERENTIAL GENE EXPRESSION. EVERY CONDITION IS CONSIDERED TOGETHER
+
+### 1.1. Create the tpm table with only gene expressed with tpm above certain value. The threshold used is tpm > 0.5
+
+```{r}
+# 1.1.1. Prepare the dataset of the first condition (well watered "WW").
+
+GAZUL_WW.tpm.data$WW_average <- (GAZUL_WW.tpm.data[,1] + GAZUL_WW.tpm.data[,2] + GAZUL_WW.tpm.data[,3] + GAZUL_WW.tpm.data[,4] + GAZUL_WW.tpm.data[,5]) / 5 # Calculate the mean for the tpm of the replicates and generate a new column with the name after $ ("WW")
+
+# Create a new table with the calculated means of tpm
+colnames(GAZUL_WW.tpm.data)[6] <-  "WW_average" # Define the names of the columns for the new table
+tpmData.average.GAZUL_WW <- GAZUL_WW.tpm.data[6] # Create the table choosing the right columns
+head(tpmData.average.GAZUL_WW)
+
+# In the table of means, create a new column that indicates the maximum tpm among the time points
+tpmData.average.GAZUL_WW$maxtpm <- apply(tpmData.average.GAZUL_WW,1,max)
+head(tpmData.average.GAZUL_WW)
+
+# Create a new table filtering the transcripts based on the threshold maxtpm > 0.5
+GAZUL_WW_genes_0.5tpm <- tpmData.average.GAZUL_WW[tpmData.average.GAZUL_WW$maxtpm > 0.5,]
+dim(tpmData.average.GAZUL_WW)
+dim(GAZUL_WW_genes_0.5tpm)
+
+head(GAZUL_WW_genes_0.5tpm)
+```
+
+```{r}
+# 1.1.2. Prepare the data set of the second condition (long water deficit "LWD").
+
+GAZUL_LWD.tpm.data$LWD_average <- (GAZUL_LWD.tpm.data[,1] + GAZUL_LWD.tpm.data[,2] + GAZUL_LWD.tpm.data[,3] + GAZUL_LWD.tpm.data[,4] + GAZUL_LWD.tpm.data[,5]) / 5 # Calculate the mean for the tpm of the replicates and generate a new column with the name after $ ("WW")
+
+# Create a new table with the calculated means of tpm
+colnames(GAZUL_LWD.tpm.data)[6]  <-  "LWD_average" # Define the names of the columns for the new table
+tpmData.average.GAZUL_LWD <- GAZUL_LWD.tpm.data[6] # Create the table choosing the right columns
+head(tpmData.average.GAZUL_LWD)
+
+# In the table of means, create a new column that indicates the maximum tpm among the time points
+tpmData.average.GAZUL_LWD$maxtpm <- apply(tpmData.average.GAZUL_LWD,1,max)
+head(tpmData.average.GAZUL_LWD)
+
+# Create a new table filtering the transcripts based on the threshold maxtpm > 0.5
+GAZUL_LWD_genes_0.5tpm <- tpmData.average.GAZUL_LWD[tpmData.average.GAZUL_LWD$maxtpm > 0.5,]
+dim(tpmData.average.GAZUL_LWD)
+dim(GAZUL_LWD_genes_0.5tpm)
+
+head(GAZUL_LWD_genes_0.5tpm)
+```
+
+```{r}
+# 1.1.3. Prepare the data set of the third condition (terminal water deficit "TWD").
+
+GAZUL_TWD.tpm.data$TWD_average <- (GAZUL_TWD.tpm.data[,1] + GAZUL_TWD.tpm.data[,2] + GAZUL_TWD.tpm.data[,3] + GAZUL_TWD.tpm.data[,4] + GAZUL_TWD.tpm.data[,5]) / 5 # Calculate the mean for the tpm of the replicates and generate a new column with the name after $ ("WW")
+
+# Create a new table with the calculated means of tpm
+colnames(GAZUL_TWD.tpm.data)[6] <-  "TWD_average" # Define the names of the columns for the new table
+tpmData.average.GAZUL_TWD <- GAZUL_TWD.tpm.data[6] # Create the table choosing the right columns
+head(tpmData.average.GAZUL_TWD) 
+
+# In the table of means, create a new column that indicates the maximum tpm among the time points
+tpmData.average.GAZUL_TWD$maxtpm <- apply(tpmData.average.GAZUL_TWD,1,max)
+head(tpmData.average.GAZUL_TWD)
+
+# Create a new table filtering the transcripts based on the threshold maxtpm > 0.5
+GAZUL_TWD_genes_0.5tpm <- tpmData.average.GAZUL_TWD[tpmData.average.GAZUL_TWD$maxtpm > 0.5,]
+dim(tpmData.average.GAZUL_TWD)
+dim(GAZUL_TWD_genes_0.5tpm)
+
+head(GAZUL_TWD_genes_0.5tpm)
+```
+
+```{r}
+# 1.1.4. Create a new table merging the tables for all the conditions generated above. WELL WATERED (WW) + LONG WATER DEFICIT (LWD) + TERMINAL WATER DEFICIT (TWD) CONDITIONS
+
+GAZUL_WW_genes_0.5tpm$gene <- row.names(GAZUL_WW_genes_0.5tpm)
+head(GAZUL_WW_genes_0.5tpm)
+
+GAZUL_LWD_genes_0.5tpm$gene <- row.names(GAZUL_LWD_genes_0.5tpm)
+head(GAZUL_LWD_genes_0.5tpm)
+
+GAZUL_TWD_genes_0.5tpm$gene <- row.names(GAZUL_TWD_genes_0.5tpm)
+head(GAZUL_TWD_genes_0.5tpm)
+
+supra_merge_tpm <- list(GAZUL_WW_genes_0.5tpm, GAZUL_LWD_genes_0.5tpm, GAZUL_TWD_genes_0.5tpm) %>% reduce(full_join, by = "gene")
+row.names(supra_merge_tpm) <- supra_merge_tpm$gene
+dim(supra_merge_tpm)
+supra_merge_tpm <- supra_merge_tpm[!grepl("LC",supra_merge_tpm$gene), ]
+dim(supra_merge_tpm)
+head(supra_merge_tpm)
+```
+
+### 1.2. Create the gene count table for each condition with the tpm filter
+
+```{r}
+# 1.2.1 Data set of the first condition (well watered "WW")
+
+GAZUL_WW.count.data <- read.csv(file = paste0(data_dir_WW,"GAZUL_WW_counts.tsv"), sep = "\t") # Import the table of gene count from the directory of trimm results
+
+GAZUL_WW.count.data.2 <- GAZUL_WW.count.data[,1:5]
+head(GAZUL_WW.count.data.2)
+dim(GAZUL_WW.count.data.2)
+
+# Create the new data set applying the tpm > 0.5 table 
+GAZUL_WW.counts_0.5tpm <- GAZUL_WW.count.data.2[rownames(GAZUL_WW.count.data.2) %in% supra_merge_tpm$gene,]
+GAZUL_WW.counts_0.5tpm$gene <- rownames(GAZUL_WW.counts_0.5tpm)
+dim(GAZUL_WW.counts_0.5tpm)
+head(GAZUL_WW.counts_0.5tpm)
+```
+
+```{r}
+# 1.2.1 Data set of the second condition (long water deficit "LWD")
+
+GAZUL_LWD.count.data <- read.csv(file = paste0(data_dir_LWD,"GAZUL_LWD_counts.tsv"), sep = "\t") # Import the table of gene count from the directory of trimm results
+
+GAZUL_LWD.count.data.2 <- GAZUL_LWD.count.data[,1:5]
+head(GAZUL_LWD.count.data.2)
+dim(GAZUL_LWD.count.data.2)
+
+# Create the new data set applying the tpm > 0.5 table 
+GAZUL_LWD.counts_0.5tpm <- GAZUL_LWD.count.data.2[rownames(GAZUL_LWD.count.data.2) %in% supra_merge_tpm$gene,]
+GAZUL_LWD.counts_0.5tpm$gene <- rownames(GAZUL_LWD.counts_0.5tpm)
+head(GAZUL_LWD.counts_0.5tpm)
+dim(GAZUL_LWD.counts_0.5tpm)
+```
+
+```{r}
+# 1.2.2 Data set of the third condition (terminal water deficit "TWD")
+
+GAZUL_TWD.count.data <- read.csv(file = paste0(data_dir_TWD,"GAZUL_TWD_counts.tsv"), sep = "\t") # Import the table of gene count from the directory of trimm results
+
+GAZUL_TWD.count.data.2 <- GAZUL_TWD.count.data[,1:5]
+head(GAZUL_TWD.count.data.2)
+dim(GAZUL_TWD.count.data.2)
+
+# Create the new data set applying the tpm > 0.5 table 
+GAZUL_TWD.counts_0.5tpm <- GAZUL_TWD.count.data.2[rownames(GAZUL_TWD.count.data.2) %in% supra_merge_tpm$gene,]
+GAZUL_TWD.counts_0.5tpm$gene <- rownames(GAZUL_TWD.counts_0.5tpm)
+head(GAZUL_TWD.counts_0.5tpm)
+dim(GAZUL_TWD.counts_0.5tpm)
+```
+
+## STEP 2. Analyse the differential gene expression with DESeq2
+
+### 2.1. Create the matrix for DESeq2
+
+#### 2.1.0. Matrix with the three conditions together for a exploratory analysis of the inner variability of the groups of individuals.
+
+```{r}
+# 2.1.0.1. Create a new data set with all the conditions with the gene counts previously filtered 
+
+total_counts_for_DESeq2 <- list(GAZUL_WW.counts_0.5tpm, GAZUL_LWD.counts_0.5tpm, GAZUL_TWD.counts_0.5tpm) %>% reduce(full_join, by = "gene")
+head(total_counts_for_DESeq2)
+dim(total_counts_for_DESeq2)
+
+rownames(total_counts_for_DESeq2) <- total_counts_for_DESeq2$gene # Put the names of the genes in the merged table as the rownames for the data set
+total_counts_for_DESeq2 <- total_counts_for_DESeq2[,-6] # Remove the column with the gene names (usually the first column)
+head(total_counts_for_DESeq2)
+dim(total_counts_for_DESeq2)
+
+
+# 2.1.0.2. Create the dds matrix for PCA.
+
+water_regime <- c("GAZUL_WW","GAZUL_LWD","GAZUL_TWD") # Create and name the vectors needed. Name the vectors in the same order as the replicates are
+CondVector <- rep(water_regime,each=5) # Indicate how many replicates are in each vector
+CondVector
+
+counts <- round(total_counts_for_DESeq2) # Create a data set with the gene counts rounded
+head(counts)
+  
+sampleTable <- data.frame(row.names = colnames(counts), conditions = as.factor(CondVector)) # Create the data frame for the matrix that will be used for the analysis. Define the CondVector previously created as the conditions factor for the analysis
+sampleTable
+head(sampleTable) 
+
+dds <- DESeqDataSetFromMatrix(countData = counts, colData = sampleTable, design=~conditions) 
+dds$conditions <- relevel(dds$conditions, "GAZUL_WW") # Define which of the conditions is the reference
+dim(dds)
+dds
+
+# PCA plot of the dds matrix 
+vsd <- vst(dds, blind=FALSE) # Transformation of the variance of the standard deviation
+pcaData <- plotPCA(vsd, intgroup=c("conditions"), returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+nudge <- position_nudge(y = 5)
+
+plot <- ggplot(pcaData, aes(x = PC1, y = PC2, color = conditions, label = name)) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  coord_fixed() +
+  geom_point(size = 5) +
+  theme_bw() +
+  scale_color_manual(values = c("#6ac7fc","#ebd834", "#d10a0a")) +
+  ggtitle("GAZUL under two water deficits ") +
+  geom_label(aes(label = name), position = nudge, size = 3, size.unit = "mm")
+print(plot)
+
+```
+
+#### 2.1.1. Preparation of the matrix for each water deficit treatment contrast with DESeq2. The contrast are done by indpendently analysis for each comparison.
+
+##### OPTION 1: Applying the specific filter for LWD and TWD respectively, instead of the common TPM > 0.5 filter use for the 3 conditions matrix
+```{r}
+# 2.1.1.1. Create the data set for LWD contrast applying the tpm > 0.5 table
+LWD_merge_tpm <- list(GAZUL_WW_genes_0.5tpm, GAZUL_LWD_genes_0.5tpm) %>% reduce(full_join, by = "gene")
+row.names(LWD_merge_tpm) <- LWD_merge_tpm$gene
+LWD_merge_tpm <- LWD_merge_tpm[!grepl("LC",LWD_merge_tpm$gene), ]
+dim(LWD_merge_tpm)
+
+GAZUL_WW_by_LWD.counts_0.5tpm <- GAZUL_WW.count.data.2[rownames(GAZUL_WW.count.data.2) %in% LWD_merge_tpm$gene,]
+GAZUL_WW_by_LWD.counts_0.5tpm$gene <- rownames(GAZUL_WW_by_LWD.counts_0.5tpm)
+
+GAZUL_LWD.counts_0.5tpm <- GAZUL_LWD.count.data.2[rownames(GAZUL_LWD.count.data.2) %in% LWD_merge_tpm$gene,]
+GAZUL_LWD.counts_0.5tpm$gene <- rownames(GAZUL_LWD.counts_0.5tpm)
+
+counts_for_DESeq2_LWD <- list(GAZUL_WW_by_LWD.counts_0.5tpm, GAZUL_LWD.counts_0.5tpm) %>% reduce(full_join, by = "gene")
+rownames(counts_for_DESeq2_LWD) <- counts_for_DESeq2_LWD$gene # Put the names of the genes in the merged table as the rownames for the data set
+counts_for_DESeq2_LWD <- counts_for_DESeq2_LWD[,-6] # Remove the column with the gene names (usually the first column)
+head(counts_for_DESeq2_LWD)
+dim(counts_for_DESeq2_LWD)
+
+
+# 2.1.1.1. Create the data set for TWD contrast applying the tpm > 0.5 table
+TWD_merge_tpm <- list(GAZUL_WW_genes_0.5tpm, GAZUL_TWD_genes_0.5tpm) %>% reduce(full_join, by = "gene")
+row.names(TWD_merge_tpm) <- TWD_merge_tpm$gene
+TWD_merge_tpm <- TWD_merge_tpm[!grepl("LC",TWD_merge_tpm$gene), ]
+dim(TWD_merge_tpm)
+
+GAZUL_WW_by_TWD.counts_0.5tpm <- GAZUL_WW.count.data.2[rownames(GAZUL_WW.count.data.2) %in% TWD_merge_tpm$gene,]
+GAZUL_WW_by_TWD.counts_0.5tpm$gene <- rownames(GAZUL_WW_by_TWD.counts_0.5tpm)
+
+GAZUL_TWD.counts_0.5tpm <- GAZUL_TWD.count.data.2[rownames(GAZUL_TWD.count.data.2) %in% TWD_merge_tpm$gene,]
+GAZUL_TWD.counts_0.5tpm$gene <- rownames(GAZUL_TWD.counts_0.5tpm)
+
+counts_for_DESeq2_TWD <- list(GAZUL_WW.counts_0.5tpm, GAZUL_TWD.counts_0.5tpm) %>% reduce(full_join, by = "gene") %>% na.omit()
+rownames(counts_for_DESeq2_TWD) <- counts_for_DESeq2_TWD$gene # Put the names of the genes in the merged table as the rownames for the data set
+counts_for_DESeq2_TWD <- counts_for_DESeq2_TWD[,-6] # Remove the column with the gene names (usually the first column)
+head(counts_for_DESeq2_TWD)
+dim(counts_for_DESeq2_TWD)
+
+```
+
+##### OPTION 2: Extracting the columns for LWD and TWD treatments, reespectively from the 3 conditions dataset with the common TPM > 0.5 filter
+
+```{r}
+
+colnames(total_counts_for_DESeq2)
+
+# # 2.1.1.2. Matrix for LWD vs WW contrast
+counts_for_DESeq2_LWD <- total_counts_for_DESeq2[,1:10]
+head(counts_for_DESeq2_LWD)
+dim(counts_for_DESeq2_LWD)
+
+# # 2.1.1.2. Matrix for TWD vs WW contrast
+counts_for_DESeq2_TWD <- total_counts_for_DESeq2[,c(1,2,3,4,5,11,12,13,14,15)]
+head(counts_for_DESeq2_TWD)
+dim(counts_for_DESeq2_TWD)
+
+```
+
+#### 2.1.2. RUN AND SAVED THE DESeq2 ANALYSIS
+
+```{r}
+# 2.1.2.1. Define the groups (factors) for the analysis. 
+
+water_deficit <- c("_LWD", "_TWD") # Vector created to match the name given for each data set.
+
+# 2.1.2.2. Get data for each point control vs treatment. A loop is created based on vector "water_deficit"
+
+for (i in water_deficit) {
+  # Creation of the dds matrix
+water_regime <- c(paste0("GAZUL_WW"),paste0("GAZUL",i)) # Create and name the vectors needed. Name the vectors in the same order as the replicates are
+CondVector <- rep(water_regime,each=5) # Indicate how many replicates are in each vector
+CondVector
+
+counts <- round(get(paste0("counts_for_DESeq2",i))) # Create a data set with the gene counts rounded
+  
+sampleTable <- data.frame(row.names = colnames(counts), conditions = as.factor(CondVector)) # Create the data frame for the matrix that will be used for the analysis. Define the CondVector previously created as the conditions factor for the analysis
+sampleTable
+
+dds <- DESeqDataSetFromMatrix(countData = counts, colData = sampleTable, design=~conditions) 
+dds
+
+dds$conditions <- relevel(dds$conditions, "GAZUL_WW") # Define which of the conditions is the reference
+dim(dds)
+
+# PCA plot of the dds matrix 
+vsd <- vst(dds, blind=FALSE) # Transformation of the variance of the standard deviation
+pcaData <- plotPCA(vsd, intgroup=c("conditions"), returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+nudge <- position_nudge(y = 5)
+
+plot <- ggplot(pcaData, aes(x = PC1, y = PC2, color = conditions, label = name)) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  coord_fixed() +
+  geom_point(size = 5) +
+  theme_bw() +
+  scale_color_manual(values = c("darkgrey", "black")) +
+  ggtitle("GAZUL under one treatment") +
+  geom_label(aes(label = name), position = nudge, size = 3, size.unit = "mm")
+print(plot)
+
+# 2.2.1. Run the function
+
+dds_analysis <- DESeq(dds)
+
+dds_res <- results(dds_analysis, contrast = c("conditions",paste0("GAZUL",i), paste0("GAZUL_WW")))
+  
+  # Sort results on padj
+  ordered_res <- dds_res[order(dds_res$padj),] # Reorder based on the padj value
+  head(ordered_res)
+  tail(ordered_res)
+  ordered_res_na.rm <- na.omit(ordered_res) # Remove the NA gaps
+  head(ordered_res_na.rm)
+  tail(ordered_res_na.rm)
+  
+  # Output ordered_res to csv
+  write.csv(ordered_res_na.rm, file = paste0(out_dir_DESeq2,"GAZUL_WW",i,"_results_all.csv")) # Save all the results for the vulcano plots
+  write.csv(ordered_res_na.rm[ordered_res_na.rm$padj<0.05,],file = paste0(out_dir_DESeq2,"GAZUL_WW",i,"_results.csv")) # Save the results whose padj is lower than 0.05
+  
+  assign(paste("GAZUL_WW",i,".na.rm",sep=""), ordered_res_na.rm[ordered_res_na.rm$padj<0.05,]) # Important the name given here is used below
+  
+  print(paste("GAZUL_WW",i,".na.rm",sep=""))
+  dim(assign(paste("GAZUL_WW",i,".na.rm",sep=""), ordered_res_na.rm[ordered_res_na.rm$padj<0.05,]))
+
+  resLFC <- lfcShrink(dds_analysis, coef=paste0("conditions_GAZUL",i,"_vs_GAZUL_WW"), type="ashr")
+  print(plotMA(resLFC, ylim=c(-2,2)))
+  
+}
+
+# Create a data drame to summarize the significant differential expressed genes. Separate according to range of p-value adjusted
+
+DE_genes <- data.frame(treatment = character(),
+                       DE_genes_0.05 = numeric(), upreg_0.05 = numeric(), downreg_0.05 = numeric(),
+                       DE_genes_0.01 = numeric(), upreg_0.01 = numeric(), downreg_0.01 = numeric(),
+                       DE_genes_0.001 = numeric(), upreg_0.001 = numeric(), downreg_0.001 = numeric())
+
+DE_genes
+
+for (i in water_deficit) {
+  
+  head(get(paste("GAZUL_WW",i,".na.rm",sep="")))
+  my_data <- get(paste("GAZUL_WW",i,".na.rm",sep="")) # Get the data saved above
+  head(my_data)
+  
+  # Extract the data from the DESeq2 analysis. The range of p-value are those who where in the "DE_genes" data frame
+  DE_genes_0.05 <- nrow(my_data) 
+  upreg_0.05 <- nrow(my_data[my_data$log2FoldChange > 1,])
+  downreg_0.05 <- nrow(my_data[my_data$log2FoldChange < -1,])
+  DE_genes_0.01 <- nrow(my_data[my_data$padj < 0.01,])
+  upreg_0.01 <- nrow(my_data[my_data$padj < 0.01 & my_data$log2FoldChange > 1,])
+  downreg_0.01 <- nrow(my_data[my_data$padj < 0.01 & my_data$log2FoldChange < -1,])
+  DE_genes_0.001 <- nrow(my_data[my_data$padj < 0.001,])
+  upreg_0.001 <- nrow(my_data[my_data$padj < 0.001 & my_data$log2FoldChange > 1,])
+  downreg_0.001 <- nrow(my_data[my_data$padj < 0.001 & my_data$log2FoldChange < -1,])
+  
+  # Fill the data frame with the data extracted
+  DE_genes <- rbind(DE_genes, list(treatment = as.character(i),
+                                   DE_genes_0.05 = DE_genes_0.05, upreg_0.05 = upreg_0.05, downreg_0.05 = downreg_0.05,
+                                   DE_genes_0.01 = DE_genes_0.01, upreg_0.01 = upreg_0.01, downreg_0.01 = downreg_0.01,
+                                   DE_genes_0.001 = DE_genes_0.001, upreg_0.001 = upreg_0.001, downreg_0.001 = downreg_0.001))
+  }
+
+DE_genes
+
+colnames(DE_genes) <- c("treatment", "DE_genes_0.05", "upreg2fold_0.05", "downreg2fold_0.05", "DE_genes_0.01", "upreg2fold_0.01", "downreg2fold_0.01", "DE_genes_0.001", "upreg2fold_0.001", "downreg2fold_0.001") # Names of the columns in the data frame. Should match the names defined above to avoid confusions
+
+write.csv(DE_genes, file = paste0(out_dir_DESeq2,"GAZUL","_DE_genes_results.csv")) # Save the data frame/table created with the proper name in .csv format
+```
+
+
+```{r}
+plotDispEsts(dds_analysis)
+resultsNames(dds_analysis)
+
+
+plotMA(res, ylim=c(-2,2))
+
+
+resLFC_LWD <- lfcShrink(dds_analysis, coef="conditions_GAZUL_LWD_vs_GAZUL_WW", type="ashr")
+resLFC_TWD <- lfcShrink(dds_analysis, coef="conditions_GAZUL_TWD_vs_GAZUL_WW", type="apeglm")
+plotMA(resLFC_LWD, ylim=c(-2,2))
+plotMA(resLFC_TWD, ylim=c(-2,2))
+
+plotCounts(dds_analysis, gene=which.min(res$padj), intgroup="conditions")
+
+ntd <- normTransform(dds_analysis)
+select <- order(rowMeans(counts(dds_analysis,normalized=TRUE)),
+                decreasing=TRUE)[1:20]
+df <- as.data.frame(colData(dds_analysis)[,c("conditions")])
+pheatmap(assay(vsd)[select,], cluster_rows=FALSE, show_rownames=TRUE,
+         cluster_cols=FALSE, annotation_col=df)
+```
+
+
+## STEP 3. GO term enrichment for each time point for the three thresholds
+
+### 3.1. Read in information about lengths and GO terms 
+
+```{r}
+# 3.1.1. Read in GO terms
+
+all_go <- read.csv("//jic-hpc-data/HPC-Home/rna-training/R/IWGSC_stress_GO.csv",sep = ",") # Import the GO terms file
+head(all_go)
+all_go <- all_go[,c(1,2)]
+colnames(all_go) <- c("Gene", "GO_term") # Name properly each colum for the downstream steps
+head(all_go)
+dim(all_go)
+
+
+```
+
+```{r}
+# 3.1.1.(Extra) For the case of "IWGSC_stress_GO.csv" file, convert the file from v1.0 to v1.1. Maybe this chunk could be unnecessary in the future.
+
+# Note from the original script: "this is probably not the perfect thing to do so it might need to be re-done.....". In any case, this code works for the aim of the script I think
+
+head(gsub("01G", "02G", all_go$Gene))
+
+all_go$Gene <- (gsub("01G", "02G", all_go$Gene))
+head(all_go)
+dim(all_go)
+
+all_go_HC <- all_go[!grepl("LC", all_go$Gene),] # Remove the LC genes of the GO_term v1.0
+head(all_go_HC)
+dim(all_go_HC)
+
+length(unique(all_go_HC$Gene)) # Number of HC (high-confidence) genes with go terms before removing ones which don't match v1.0 to v1.1
+
+
+genes_to_transfer <- read.csv(file="//jic-hpc-data/HPC-Home/rna-training/R/genes_to_transfer_qcov90_pident99_same_ID.csv") # Import the v1.1 of the GO_terms 
+head(genes_to_transfer)
+
+all_go_new <- all_go[all_go$Gene %in% genes_to_transfer$gene_v1.1,] # Only keep genes which were >99 % ID > 90% coverage from v1.0 to v1.1 
+head(all_go_new)
+dim(all_go_new)
+
+length(unique(all_go_new$Gene)) # Number of genes with go terms
+```
+```{r}
+# 3.1.2. Select those genes which were used for DESeq2 (after the filter tpm >0.5)
+
+head(total_counts_for_DESeq2) 
+dim(total_counts_for_DESeq2)
+
+all_go_subset <- subset(all_go_new, Gene%in%rownames(total_counts_for_DESeq2))
+View(all_go_subset)
+dim(all_go_subset)
+
+```
+
+```{r}
+# 3.1.3. Create a vector for the gene lengths. We need to get lengths of the genes not of transcripts (output from tximport script)
+
+gene_lengths <- read.csv(file = paste0(data_dir_WW,"GAZUL_WW_gene_length.csv"), header =T) # Import the file with the tximport gene lengths
+head(gene_lengths)
+colnames(gene_lengths) <- c("gene", "length") # Name properly the columns of the table
+head(gene_lengths)
+dim(gene_lengths)
+
+# Select those genes which were used for DESeq2, similarly to the chunk above for GO term vector
+t1 <- subset(gene_lengths, gene %in% rownames(total_counts_for_DESeq2))
+head(t1)
+dim(t1)
+
+# Create vectors that could be use with GO.Seq
+gene.lens <- as.numeric(t1$length) # Vector of gene lengths for the bias.data of nullp function (below)
+names(gene.lens) = t1$gene
+head(gene.lens)
+length(gene.lens)
+
+assayed.genes <- as.vector(t1$gene) # Vector with (names of) the genes assayed that later on will be separate according to p-value adj from DESeq2
+length(assayed.genes)
+
+```
+
+### 3.2. GO term enrichment. Manual: https://bioinformatics-core-shared-training.github.io/cruk-summer-school-2020/RNAseq/extended_html/06_Gene_set_testing.html
+
+```{r}
+# 3.2.1. Create the data frame for the output
+
+GO_enriched <- data.frame(category = character(), over_represented_pvalue =  numeric(), under_represented_pvalue = numeric(), numDEInCat = numeric(), numInCat = numeric(), term = character(), ontology = character(), over_rep_padj = numeric(), treatment_threshold = character())
+
+head(GO_enriched)
+
+# 3.2.2. Do the GO enrichment for each time point. The time_list object was defined in DESeq2 #2.2.2. chunk
+
+for (i in water_deficit) {
+  
+  head(get(paste("GAZUL_WW",i,".na.rm",sep = ""))) # Define in in DESeq2 #2.2.2. chunk, for each time point in the item list
+  my_data <- get(paste("GAZUL_WW",i,".na.rm",sep = "")) # Get the data from DESeq2 analysis
+  head(my_data)
+  
+  # Create a sublist of items (j) each item is the vector with the differential expressed genes inside the range (based on the padj of DESeq2). We can choose the ranges that are more interesting
+  upreg2fold_0.05 <- (my_data[my_data$padj < 0.05 & my_data$log2FoldChange > 1,])
+  downreg2fold_0.05 <- (my_data[my_data$padj < 0.05 & my_data$log2FoldChange < -1,])
+  upreg2fold_0.01 <- (my_data[my_data$padj < 0.01 & my_data$log2FoldChange > 1,])
+  downreg2fold_0.01 <- (my_data[my_data$padj < 0.01 & my_data$log2FoldChange < -1,])
+  upreg2fold_0.001 <- (my_data[my_data$padj < 0.001 & my_data$log2FoldChange > 1,])
+  downreg2fold_0.001 <- (my_data[my_data$padj < 0.001 & my_data$log2FoldChange < -1,])
+  
+  for (j in c("upreg2fold_0.05","downreg2fold_0.05","upreg2fold_0.01","downreg2fold_0.01","upreg2fold_0.001","downreg2fold_0.001")) { # Indicate the name of the (j) items as they were defined just above
+    genes_for_GO <- (get(j))
+    head(genes_for_GO)
+    
+    # Now do GO stats analysis on the genes expressed in each pattern compared to all genes expressed
+    # Create a named binary vector for genes where one means differently expressed and 0 means not differentially expressed
+    de.genes <- rownames(genes_for_GO)
+    gene.vector= as.integer(assayed.genes%in%de.genes)
+    names(gene.vector)=assayed.genes
+    head(gene.vector)
+    
+    # Carry out the GOseq analysis
+    
+    pwf = nullp(gene.vector, bias.data = gene.lens, plot.fit = TRUE)
+    GO.wall = goseq(pwf,gene2cat = all_go_subset)
+    # This gave table with p-values. Now correct for multiple testing using FDR
+    enriched.GO = GO.wall$category[p.adjust(GO.wall$over_represented_pvalue, method = "BH")<.05]
+    head(enriched.GO)
+    
+    # Add new column with over represented GO terms padj
+    GO.wall$over_rep_padj = p.adjust(GO.wall$over_represented_pvalue, method = "BH")
+    write.table(GO.wall[GO.wall$over_rep_padj<0.05,], file = paste0(out_dir_GO,"GAZUL",i,"_vs_WW_results_",j,"_GOseq.tsv", sep = ""), sep = "\t", quote = FALSE, col.names = TRUE, row.names = F)
+    GO_enriched_timepoint <- GO.wall[GO.wall$over_rep_padj <0.05 & GO.wall$ontology == "BP",]
+    head(GO_enriched_timepoint)
+    
+    # if no enriched GO terms don't add to dataframe
+    
+    if(nrow(GO_enriched_timepoint)>0) {
+    
+    GO_enriched_timepoint$treatment_threshold <- paste0(i,"_treatment_",j) # Warning: the way to call each category in this column "timepoint_threshold" will be important for one step ahead
+    GO_enriched <- rbind(GO_enriched,GO_enriched_timepoint)
+    
+    }
+}
+}
+
+
+```
+
+### 3.3. Re-arrange the table to be in an easier interpretet format
+
+```{r}
+# Start from GO_enriched object
+
+head(GO_enriched)
+View(GO_enriched)
+
+# Group based on "timepoint_threshold" categories and give ranks based on over_rep_padj result
+
+GO_enriched_ranked <- GO_enriched %>%
+  group_by(treatment_threshold) %>%
+  mutate(subrank = rank(over_rep_padj,ties.method = "first"))
+
+# Check whether rank worked
+
+head(data.frame(GO_enriched_ranked))
+colnames(GO_enriched_ranked)
+View(GO_enriched_ranked)
+
+
+```
+
+```{r}
+# Now select columns to spread
+
+GO_enriched_sel <- as.data.frame(GO_enriched_ranked[,c(6,9,10)]) # Select the columns "term", "time_threshold" and "subrank"
+head(GO_enriched_sel)
+View(GO_enriched_sel)
+
+GO_data_spread <- spread(GO_enriched_sel, subrank, term) # The spread function put in the same row the terms for each timepoint_threshold
+dim(GO_data_spread)
+head(GO_data_spread)
+
+unique(GO_data_spread$timepoint_threshold)
+head(GO_data_spread)
+
+```
+
+```{r}
+
+# Want to add number of genes in each DE group, and groups without BP GO terms enriched
+
+DE_genes_long <- DE_genes%>% 
+  pivot_longer(!treatment, names_to = "threshold") # Create a data frame where the columns (DE_genes_0.05, upreg2fold_0.05, etc) created for DESeq2 output are now rows instead
+head(DE_genes_long)
+tail(DE_genes_long)
+
+# select only DE 2 fold padj 0.05, 0.01 or 0.001 and make a new column with the "timepoint_threshold" to facilitate merging
+DE_genes_long_categories <- DE_genes_long %>%
+  filter(threshold == "downreg2fold_0.05" |
+           threshold == "upreg2fold_0.05" |
+           threshold == "downreg2fold_0.001" |
+           threshold == "upreg2fold_0.001" |
+           threshold == "upreg2fold_0.01" |
+           threshold == "downreg2fold_0.01" ) %>%
+  mutate(treatment_threshold = paste0(treatment,"_treatment_",threshold)) # The word "training_" should be the same as it is indicated in the warning meassage in GOseq chunk #3.2.2.
+
+head(DE_genes_long_categories)
+
+```
+
+```{r}
+# Merge both tables GO_data_spread and DE_gene_long_categories
+
+merged_GO_data_spread <- merge(DE_genes_long_categories, GO_data_spread, by = "treatment_threshold")
+
+View(merged_GO_data_spread)
+dim(merged_GO_data_spread)
+
+merged_GO_data_spread_by_treatment <- merged_GO_data_spread[order(merged_GO_data_spread$treatment),] # Short by timepoint
+colnames(merged_GO_data_spread_by_treatment)[4] <- "num_DE_genes" # Rename value column to num_DE_genes
+
+head(merged_GO_data_spread_by_treatment)
+View(merged_GO_data_spread_by_treatment)
+
+```
+
+```{r}
+# Separate into 0.05, 0.01 and 0.001
+
+merged_GO_data_spread_0.05 <- merged_GO_data_spread_by_treatment %>%
+  filter(threshold == "upreg2fold_0.05" | threshold == "downreg2fold_0.05")
+head(merged_GO_data_spread_0.05)
+
+merged_GO_data_spread_0.01 <- merged_GO_data_spread_by_treatment %>%
+  filter(threshold == "upreg2fold_0.01" | threshold == "downreg2fold_0.01")
+head(merged_GO_data_spread_0.01)
+
+merged_GO_data_spread_0.001 <- merged_GO_data_spread_by_treatment %>%
+  filter(threshold == "upreg2fold_0.001" | threshold == "downreg2fold_0.001")
+head(merged_GO_data_spread_0.001)
+
+# Save to a .csv file
+
+write.csv(file=paste0(out_dir_GO,"GAZUL_GO_enrichment_padj0.05.csv"), merged_GO_data_spread_0.05, row.names = F)
+
+write.csv(file=paste0(out_dir_GO,"GAZUL_GO_enrichment_padj0.01.csv"), merged_GO_data_spread_0.01, row.names = F)
+
+write.csv(file=paste0(out_dir_GO,"GAZUL_GO_enrichment_padj0.001.csv"), merged_GO_data_spread_0.001, row.names = F)
+
+```
+
+---------------------------------------------------------------------------------------------------------------------------
+
+# OBTAIN THE GO TERM ENRICHMENT OUTPUT WITH GENE IDS LIST
+
+# Load the datasets
+
+```{r}
+# 1.1. Import the DESeq2 results. Select the same padj value for both DEGs results and Go terms.
+# Effect of long water deficit (LWD vs WW)
+deg.LWD <- read.csv(file=paste0(out_dir_DESeq2,"GAZUL_WW_LWD_results.csv"), sep = ",")
+Up_deg.LWD <- subset(deg.LWD, log2FoldChange > 1 & padj < 0.001)
+Down_deg.LWD <- subset(deg.LWD, log2FoldChange < -1 & padj < 0.001)
+
+# Effect of terminal water deficit (TWD vs WW)
+deg.TWD <- read.csv(file=paste0(out_dir_DESeq2,"GAZUL_WW_TWD_results.csv"), sep = ",")
+Up_deg.TWD <- subset(deg.TWD, log2FoldChange > 1 & padj < 0.001)
+Down_deg.TWD <- subset(deg.TWD, log2FoldChange < -1 & padj < 0.001)
+
+# 1.2. Import the GO terms.
+# Import GO terms in LWD vs WW conditions, with padj < 0.001
+GOterm.up_LWD <- read.csv(file=paste0(out_dir_GO,"GAZUL_LWD_vs_WW_results_upreg2fold_0.001_GOseq.tsv"), sep = "\t")
+GOterm.down_LWD <- read.csv(file=paste0(out_dir_GO,"GAZUL_LWD_vs_WW_results_downreg2fold_0.001_GOseq.tsv"), sep = "\t")
+
+# Import GO terms in TWD vs WW conditions, with padj < 0.001
+GOterm.up_TWD <- read.csv(file=paste0(out_dir_GO,"GAZUL_TWD_vs_WW_results_upreg2fold_0.001_GOseq.tsv"), sep = "\t")
+GOterm.down_TWD <- read.csv(file=paste0(out_dir_GO,"GAZUL_TWD_vs_WW_results_downreg2fold_0.001_GOseq.tsv"), sep = "\t")
+
+```
+
+# Retrieving the gene IDs and generate a datatables og GO terms plus genes (DEGs) IDs.
+
+# Long water deficit. UP-regulated.
+```{r}
+# Create the vector list of GO terms
+term_list <- unlist(as.list(GOterm.up_LWD$category))
+term_list
+
+# Extract the DEGs of each GO term
+for (i in term_list) {
+  GO_term_genes <- subset(all_go_subset, GO_term==paste0(i))
+  assign(paste(i,"_genes_LWD_up",sep=""), subset(Up_deg.LWD, X %in% GO_term_genes$Gene))
+  }
+
+# Create the table of all GO terms associated with their DEGs
+GO_gene <- data.frame(category = character(), Gene_ids = character())
+
+for (i in term_list) {
+  my_data <- get(paste(i,"_genes_LWD_up",sep=""))
+  gene_list <- paste0(as.list(my_data$X), collapse = ",")
+  
+  GO_gene <- rbind(GO_gene, list(category = as.character(i), Gene_ids = gene_list))
+}
+GO_gene
+
+# Merge the original results of GO term enrichment with the table of associated DEGs 
+GOterm.up_LWD_ids <- list(GOterm.up_LWD, GO_gene) %>% reduce(full_join, by = "category")
+write.csv(GOterm.up_LWD_ids, file = paste0(out_dir_GO,"GAZUL_LWD_GOterm_upreg_gene_list.csv")) # Save the data frame/table created with the proper name in .csv format
+```
+
+# Long water deficit. DOWN-regulated.
+```{r}
+# Create the vector list of GO terms
+term_list <- unlist(as.list(GOterm.down_LWD$category))
+term_list
+
+# Extract the DEGs of each GO term
+for (i in term_list) {
+  GO_term_genes <- subset(all_go_subset, GO_term==paste0(i))
+  assign(paste(i,"_genes_LWD_down",sep=""), subset(Down_deg.LWD, X %in% GO_term_genes$Gene))
+}
+
+# Create the table of all GO terms associated with their DEGs
+GO_gene <- data.frame(category = character(), Gene_ids = character())
+
+for (i in term_list) {
+  my_data <- get(paste(i,"_genes_LWD_down",sep=""))
+  gene_list <- paste0(as.list(my_data$X), collapse = ",")
+  
+  GO_gene <- rbind(GO_gene, list(category = as.character(i), Gene_ids = gene_list))
+}
+GO_gene
+
+# Merge the original results of GO term enrichment with the table of associated DEGs 
+GOterm.down_LWD_ids <- list(GOterm.down_LWD, GO_gene) %>% reduce(full_join, by = "category")
+write.csv(GOterm.down_LWD_ids, file = paste0(out_dir_GO,"GAZUL_LWD_GOterm_downreg_gene_list.csv")) # Save the data frame/table created with the proper name in .csv format
+```
+
+# Terminal water deficit. UP-regulated.
+```{r}
+# Create the vector list of GO terms
+term_list <- unlist(as.list(GOterm.up_TWD$category))
+term_list
+
+# Extract the DEGs of each GO term
+for (i in term_list) {
+  GO_term_genes <- subset(all_go_subset, GO_term==paste0(i))
+  assign(paste(i,"_genes_TWD_up",sep=""), subset(Up_deg.TWD, X %in% GO_term_genes$Gene))
+  }
+
+# Create the table of all GO terms associated with their DEGs
+GO_gene <- data.frame(category = character(), Gene_ids = character())
+
+for (i in term_list) {
+  my_data <- get(paste(i,"_genes_TWD_up",sep=""))
+  gene_list <- paste0(as.list(my_data$X), collapse = ",")
+  
+  GO_gene <- rbind(GO_gene, list(category = as.character(i), Gene_ids = gene_list))
+}
+GO_gene
+
+# Merge the original results of GO term enrichment with the table of associated DEGs 
+GOterm.up_TWD_ids <- list(GOterm.up_TWD, GO_gene) %>% reduce(full_join, by = "category")
+write.csv(GOterm.up_TWD_ids, file = paste0(out_dir_GO,"GAZUL_TWD_GOterm_upreg_gene_list.csv")) # Save the data frame/table created with the proper name in .csv format
+```
+
+# Terminal water deficit. DOWN-regulated.
+```{r}
+# Create the vector list of GO terms
+term_list <- unlist(as.list(GOterm.down_TWD$category))
+term_list
+
+# Extract the DEGs of each GO term
+for (i in term_list) {
+  GO_term_genes <- subset(all_go_subset, GO_term==paste0(i))
+  assign(paste(i,"_genes_TWD_down",sep=""), subset(Down_deg.TWD, X %in% GO_term_genes$Gene))
+  }
+
+# Create the table of all GO terms associated with their DEGs
+GO_gene <- data.frame(category = character(), Gene_ids = character())
+
+for (i in term_list) {
+  my_data <- get(paste(i,"_genes_TWD_down",sep=""))
+  gene_list <- paste0(as.list(my_data$X), collapse = ",")
+  
+  GO_gene <- rbind(GO_gene, list(category = as.character(i), Gene_ids = gene_list))
+}
+GO_gene
+
+# Merge the original results of GO term enrichment with the table of associated DEGs
+GOterm.down_TWD_ids <- list(GOterm.down_TWD, GO_gene) %>% reduce(full_join, by = "category")
+write.csv(GOterm.down_TWD_ids, file = paste0(out_dir_GO,"GAZUL_TWD_GOterm_downreg_gene_list.csv")) # Save the data frame/table created with the proper name in .csv format
+```

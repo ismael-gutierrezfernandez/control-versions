@@ -1,0 +1,208 @@
+---
+title: "Differential expressed genes plots"
+author: "Ismael Gutierrez-Fernandez"
+date: "2025-03-26"
+output: html_document
+---
+
+## This script aims to plot Volcano plots from DESeq2 results.
+
+```{r}
+# Install packages. Only run the first time if needed.
+
+install.packages("VennDiagram")
+if (!require(devtools)) install.packages("devtools")
+devtools::install_github("yanlinlin82/ggvenn")
+BiocManager::install('EnhancedVolcano')
+```
+
+```{r}
+# Load packages
+library(VennDiagram)
+library(grid)
+library(futile.logger)
+library(readr)
+library(ggvenn)
+library(EnhancedVolcano)
+library(ggplot2)
+library(ggrepel)
+```
+
+```{r}
+# 1. Import the DESeq2 results and adapt the datasets to be plotted below
+
+data_dir <- "//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/DESeq2/HT41x2_water_deficits/" # Define the patway were the results are saved
+
+
+# 1.1. Effect of long water deficit (LWD)
+deg.LWD <- read.csv(file=paste0(data_dir,"HT41_WW_LWD_results_all.csv"), sep = ",")
+rownames(deg.LWD) <- deg.LWD$X
+deg.LWD <- deg.LWD[,-1]
+head(deg.LWD)
+dim(deg.LWD)
+
+# 1.2. Effect of terminal water deficit (TWD)
+deg.TWD <- read.csv(file=paste0(data_dir,"HT41_WW_TWD_results_all.csv"), sep = ",")
+rownames(deg.TWD) <- deg.TWD$X
+deg.TWD <- deg.TWD[,-1]
+head(deg.TWD)
+dim(deg.TWD)
+```
+
+```{r}
+# 2.1. Volcano plot for the effect of LWD
+
+# 2.1.1. Define the color & legend for the up and down expressed genes based on padj value
+
+keyvals <- ifelse(deg.LWD$log2FoldChange > 1 & deg.LWD$padj < 0.001,'#c2171a',
+                  ifelse(deg.LWD$log2FoldChange > 1 & deg.LWD$padj < 0.01,'#ff3336',
+                         ifelse(deg.LWD$log2FoldChange > 1 & deg.LWD$padj < 0.05,'#ff7a7d',
+                                ifelse(deg.LWD$log2FoldChange < -1 & deg.LWD$padj < 0.001,'#2b919e',
+                                       ifelse(deg.LWD$log2FoldChange < -1 & deg.LWD$padj < 0.01,'#60cddb',
+                                              ifelse(deg.LWD$log2FoldChange < -1 & deg.LWD$padj < 0.05,'#8cf2ff','#cccccc'))))))
+
+keyvals[is.na(keyvals)] <- '#cccccc'
+names(keyvals)[keyvals == '#ff7a7d'] <- 'Up (0.05)'
+names(keyvals)[keyvals == '#ff3336'] <- 'Up (0.01)'
+names(keyvals)[keyvals == '#c2171a'] <- 'Up (0.001)'
+names(keyvals)[keyvals == '#8cf2ff'] <- 'Down (0.05)'
+names(keyvals)[keyvals == '#60cddb'] <- 'Down (0.01)'
+names(keyvals)[keyvals == '#2b919e'] <- 'Down (0.001)'
+names(keyvals)[keyvals == '#cccccc'] <- 'No change'
+
+# 2.1.2 Generate the Volcano plot
+
+volcano.LWD <- EnhancedVolcano(deg.LWD,
+                lab = NA,
+                x = 'log2FoldChange',
+                y = 'padj',
+                title = 'HT41, LWD vs WW',
+                FCcutoff = 1,
+                pCutoff = 0.05,
+                pointSize = 2.0,
+                labSize = 2.0,
+                colCustom = keyvals,
+                #col = c('#cccccc', '#b3b3b3', '#999999', 'red3'),
+                colAlpha = 0.8,
+                hline = c(0.01,
+                          0.001),
+                hlineCol = c('black', 'black'),
+                hlineType = c('longdash', 'longdash'),
+                hlineWidth = c(0.5, 0.5),
+                gridlines.major = FALSE,
+                gridlines.minor = FALSE,
+                border = 'full',
+                borderWidth = 0.5,
+                legendPosition = 'right',
+                legendLabSize = 12,
+                legendIconSize = 4.0,
+) + ggplot2::coord_cartesian(ylim=c(0, 25))
+
+volcano.LWD
+
+
+```
+
+```{r}
+# 2.2. Volcano plot for the effect of TWD
+
+# 2.2.1. Define the color & legend for the up and down expressed genes based on padj value
+
+keyvals <- ifelse(deg.TWD$log2FoldChange > 1 & deg.TWD$padj < 0.001,'#c2171a',
+                  ifelse(deg.TWD$log2FoldChange > 1 & deg.TWD$padj < 0.01,'#ff3336',
+                         ifelse(deg.TWD$log2FoldChange > 1 & deg.TWD$padj < 0.05,'#ff7a7d',
+                                ifelse(deg.TWD$log2FoldChange < -1 & deg.TWD$padj < 0.001,'#2b919e',
+                                       ifelse(deg.TWD$log2FoldChange < -1 & deg.TWD$padj < 0.01,'#60cddb',
+                                              ifelse(deg.TWD$log2FoldChange < -1 & deg.TWD$padj < 0.05,'#8cf2ff','#cccccc'))))))
+
+keyvals[is.na(keyvals)] <- '#cccccc'
+names(keyvals)[keyvals == '#ff7a7d'] <- 'Up (0.05)'
+names(keyvals)[keyvals == '#ff3336'] <- 'Up (0.01)'
+names(keyvals)[keyvals == '#c2171a'] <- 'Up (0.001)'
+names(keyvals)[keyvals == '#8cf2ff'] <- 'Down (0.05)'
+names(keyvals)[keyvals == '#60cddb'] <- 'Down (0.01)'
+names(keyvals)[keyvals == '#2b919e'] <- 'Down (0.001)'
+names(keyvals)[keyvals == '#cccccc'] <- 'No change'
+
+# 2.2.2 Generate the Volcano plot
+
+volcano.TWD <- EnhancedVolcano(deg.TWD,
+                lab = NA,
+                x = 'log2FoldChange',
+                y = 'padj',
+                title = 'HT41, TWD vs WW',
+                FCcutoff = 1,
+                pCutoff = 0.05,
+                pointSize = 2.0,
+                labSize = 2.0,
+                colCustom = keyvals,
+                #col = c('#cccccc', '#b3b3b3', '#999999', 'red3'),
+                colAlpha = 0.8,
+                hline = c(0.01,
+                          0.001),
+                hlineCol = c('black', 'black'),
+                hlineType = c('longdash', 'longdash'),
+                hlineWidth = c(0.5, 0.5),
+                gridlines.major = FALSE,
+                gridlines.minor = FALSE,
+                border = 'full',
+                borderWidth = 0.5,
+                legendPosition = 'right',
+                legendLabSize = 12,
+                legendIconSize = 4.0,
+) + ggplot2::coord_cartesian(ylim=c(0, 20))
+volcano.TWD
+```
+
+```{r}
+# 3. Variation of the volcano plots to include the relevant genes names (work in pogress)
+# Volcano plots with DEGs with most significance
+
+keyvals <- ifelse(deg.LWD$log2FoldChange > 1 & deg.LWD$padj < 0.001,'#c2171a',
+                  ifelse(deg.LWD$log2FoldChange > 1 & deg.LWD$padj < 0.01,'#ff3336',
+                         ifelse(deg.LWD$log2FoldChange > 1 & deg.LWD$padj < 0.05,'#ff7a7d',
+                                ifelse(deg.LWD$log2FoldChange < -1 & deg.LWD$padj < 0.001,'#2b919e',
+                                       ifelse(deg.LWD$log2FoldChange < -1 & deg.LWD$padj < 0.01,'#60cddb',
+                                              ifelse(deg.LWD$log2FoldChange < -1 & deg.LWD$padj < 0.05,'#8cf2ff','#cccccc'))))))
+
+keyvals[is.na(keyvals)] <- '#cccccc'
+names(keyvals)[keyvals == '#ff7a7d'] <- 'Up (0.05)'
+names(keyvals)[keyvals == '#ff3336'] <- 'Up (0.01)'
+names(keyvals)[keyvals == '#c2171a'] <- 'Up (0.001)'
+names(keyvals)[keyvals == '#8cf2ff'] <- 'Down (0.05)'
+names(keyvals)[keyvals == '#60cddb'] <- 'Down (0.01)'
+names(keyvals)[keyvals == '#2b919e'] <- 'Down (0.001)'
+names(keyvals)[keyvals == '#cccccc'] <- 'No change'
+
+# 2.1.2 Generate the Volcano plot
+
+volcano.LWD <- EnhancedVolcano(deg.LWD,
+                lab = rownames(deg.LWD),
+                selectLab = c(as.list(response_to_water_deprivation_genes_up$X)),
+                x = 'log2FoldChange',
+                y = 'padj',
+                title = 'HT41, LWD vs WW',
+                FCcutoff = 1,
+                pCutoff = 0.05,
+                pointSize = 2.0,
+                labSize = 2.0,
+                colCustom = keyvals,
+                #col = c('#cccccc', '#b3b3b3', '#999999', 'red3'),
+                colAlpha = 0.8,
+                hline = c(0.01,
+                          0.001),
+                hlineCol = c('black', 'black'),
+                hlineType = c('longdash', 'longdash'),
+                hlineWidth = c(0.5, 0.5),
+                gridlines.major = FALSE,
+                gridlines.minor = FALSE,
+                border = 'full',
+                borderWidth = 0.5,
+                legendPosition = 'right',
+                legendLabSize = 12,
+                legendIconSize = 4.0,
+) + ggplot2::coord_cartesian(ylim=c(0, 25))
+
+volcano.LWD
+```
+

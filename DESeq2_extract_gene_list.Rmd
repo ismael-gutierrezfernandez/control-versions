@@ -1,0 +1,37 @@
+---
+title: "Untitled"
+author: "Ismael Gutierrez-Fernandez"
+date: "2025-04-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+HT41_WW_LWD_results <- read.csv(file=paste0(out_dir_DESeq2,"HT41_WW_LWD_results.csv"), sep = ",")
+head(HT41_WW_LWD_results)
+
+up_regulated_0.001 <- subset(HT41_WW_LWD_results, log2FoldChange > 1 & padj < 0.001)
+up_regulated_0.001_list <- unlist(as.list(up_regulated_0.001$X))
+write.csv(file=paste0(out_dir_DESeq2,"LWD_up_regulated_0.001_list.csv"), up_regulated_0.001_list, row.names = F)
+
+down_regulated_0.001 <- subset(HT41_WW_LWD_results, log2FoldChange < -1 & padj < 0.001)
+down_regulated_0.001_list <- unlist(as.list(down_regulated_0.001$X))
+write.csv(file=paste0(out_dir_DESeq2,"LWD_down_regulated_0.001_list.csv"), down_regulated_0.001_list, row.names = F)
+```
+
+```{r}
+HT41_WW_TWD_results <- read.csv(file=paste0(out_dir_DESeq2,"HT41_WW_TWD_results.csv"), sep = ",")
+head(HT41_WW_TWD_results)
+
+up_regulated_0.001 <- subset(HT41_WW_TWD_results, log2FoldChange > 1 & padj < 0.001)
+up_regulated_0.001_list <- unlist(as.list(up_regulated_0.001$X))
+write.csv(file=paste0(out_dir_DESeq2,"TWD_up_regulated_0.001_list.csv"), up_regulated_0.001_list, row.names = F)
+
+down_regulated_0.001 <- subset(HT41_WW_TWD_results, log2FoldChange < -1 & padj < 0.001)
+down_regulated_0.001_list <- unlist(as.list(down_regulated_0.001$X))
+write.csv(file=paste0(out_dir_DESeq2,"TWD_down_regulated_0.001_list.csv"), down_regulated_0.001_list, row.names = F)
+```
+
