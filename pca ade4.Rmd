@@ -1,0 +1,113 @@
+
+
+
+
+```{r}
+HT41_tpm <- read_excel("//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/tximport/HT41_tpm.xlsx")
+head(HT41_tpm)
+```
+
+```{r}
+install.packages("ade4")
+install.packages("adegraphics")
+```
+
+```{r}
+library(ade4)
+library(adegraphics)
+```
+
+
+```{r}
+
+HT41_WW_genes_0.5tpm$gene <- row.names(HT41_WW_genes_0.5tpm)
+head(HT41_WW_genes_0.5tpm)
+
+HT41_LWD_genes_0.5tpm$gene <- row.names(HT41_LWD_genes_0.5tpm)
+head(HT41_LWD_genes_0.5tpm)
+
+HT41_TWD_genes_0.5tpm$gene <- row.names(HT41_TWD_genes_0.5tpm)
+head(HT41_TWD_genes_0.5tpm)
+
+
+supra_merge_tpm <- list(HT41_WW_genes_0.5tpm, HT41_LWD_genes_0.5tpm, HT41_TWD_genes_0.5tpm) %>% reduce(full_join, by = "gene")
+row.names(supra_merge_tpm) <- supra_merge_tpm$gene
+supra_merge_tpm <- supra_merge_tpm[!grepl("LC",supra_merge_tpm$gene), ]
+dim(supra_merge_tpm)
+head(supra_merge_tpm)
+```
+
+
+```{r}
+
+HT41_WW_high_tpm <- HT41_WW.tpm.data[rownames(HT41_WW.tpm.data) %in% supra_merge_tpm$gene,]
+HT41_WW_high_tpm <- HT41_WW_high_tpm[,1:5]
+HT41_WW_high_tpm$gene <- row.names(HT41_WW_high_tpm)
+head(HT41_WW_high_tpm)
+dim(HT41_WW_high_tpm)
+
+HT41_LWD_high_tpm <- HT41_LWD.tpm.data[rownames(HT41_LWD.tpm.data) %in% supra_merge_tpm$gene,]
+HT41_LWD_high_tpm <- HT41_LWD_high_tpm[,1:5]
+HT41_LWD_high_tpm$gene <- row.names(HT41_LWD_high_tpm)
+head(HT41_LWD_high_tpm)
+dim(HT41_LWD_high_tpm)
+
+HT41_TWD_high_tpm <- HT41_TWD.tpm.data[rownames(HT41_TWD.tpm.data) %in% supra_merge_tpm$gene,]
+HT41_TWD_high_tpm <- HT41_TWD_high_tpm[,1:5]
+HT41_TWD_high_tpm$gene <- row.names(HT41_TWD_high_tpm)
+head(HT41_TWD_high_tpm)
+dim(HT41_TWD_high_tpm)
+
+
+HT41_tpm <- list(HT41_WW_high_tpm, HT41_LWD_high_tpm, HT41_TWD_high_tpm) %>% reduce(full_join, by = "gene")
+head(HT41_tpm)
+dim(HT41_tpm)
+
+tpm_dataframe <- HT41_tpm%>% 
+  pivot_longer(!gene, names_to = "Sample")
+head(tpm_dataframe)
+
+tpm_dataframe_2 <- spread(tpm_dataframe, gene, value)
+tpm_dataframe_2$treatment <- c("LWD", "LWD", "LWD", "LWD", "LWD", "TWD", "TWD", "TWD", "TWD", "TWD", "WW", "WW", "WW", "WW", "WW")
+head(tpm_dataframe_2)
+dim(tpm_dataframe_2)
+
+tpm_dataframe_2$treatment <- as.factor(tpm_dataframe_2$treatment)
+pca_dataframe <- tpm_dataframe_2[,2:49134]
+row.names(pca_dataframe) = tpm_dataframe_2$Sample
+head(pca_dataframe)
+View(pca_dataframe)
+
+```
+
+```{r}
+pca <- dudi.pca(pca_dataframe, scale = TRUE, scannf = FALSE, nf = 3) 
+summary(pca)
+
+individuls <- s.label(pca$li, labels = rownames(pca_dataframe))
+groups <- s.class(pca$li, fac = treatment)
+
+ADEgS(list(groups, individuls))
+```
+
+```{r}
+treatment <- tpm_dataframe_2$treatment
+bca_tpm <- bca(pca, treatment, scannf = FALSE)
+summary(bca_tpm)
+s.class(bca_tpm$ls, fac = treatment)
+```
+
+```{r}
+
+pca1 <- prcomp(pca_dataframe)
+plot(pca1$x[, 1], pca1$x[, 2], col = treatment, main = "PCA", xlab = "PC1", ylab = "PC2")
+
+```
+
+```{r}
+
+plotPCA(vsd, intgroup=c("condition", "type"))
+
+
+```
+

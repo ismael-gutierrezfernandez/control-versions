@@ -16,11 +16,13 @@ output: html_document
 
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
-BiocManager::install(version = "3.18") # This installs version 3.18 of BiocManager that works on R version 4.3.2; for new versions change "version=" or check the source webpage: https://bioconductor.org/install/
+BiocManager::install(version = "3.20") # This installs version 3.18 of BiocManager that works on R version 4.3.2; for new versions change "version=" or check the source webpage: https://bioconductor.org/install/
 
 BiocManager::install("tximportData")
 BiocManager::install("tximport")
 BiocManager::install("rhdf5")
+
+install.packages("readr")
 ```
 
 ```{r}
@@ -43,13 +45,18 @@ setwd("//jic-hpc-data/Group-Scratch/Philippa-Borrill/References/iwgsc_ref_seq_1.
 tx2gene <- read_csv("transcript_to_gene_refseqv1.1.csv") # Load the .csv file with the transcriptome.
 head(tx2gene)
 
+# Tetraploid wheat Svevo reference 2.0
+setwd("//jic-hpc-data/Group-Scratch/Philippa-Borrill/References/tetraploid_references/Svevo/") # Move to the directory where the transcriptome reference is stored
+tx2gene <- read.csv("gene_to_transcript_protein_coding_HC.tsv", sep = "\t") # Load the .csv file with the transcriptome.
+head(tx2gene)
+
 ```
 
 ```{r}
 # MAKE A VECTOR POINTING THE KALLISTO RESULTS FILES
 
-setwd("//jic-hpc-data/HPC-Home/rna-training/R/") # Pathway to the directory where input list (.txt) is stored
-samples <- read.table("examples_inputs_treatment.txt", header = F) # Load the list of the samples. In the input file (.txt): first column ("V1") is treatment directory where kallisto results where saved; second column (V2) sample directory that kallisto generated for each sample. It could be customized, depends on the directory hierarchy.
+setwd("//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/tximport/inputs/") # Pathway to the directory where input list (.txt) is stored
+samples <- read.table("tximport_input_REGALLO_CS_WW.txt", header = F) # Load the list of the samples. In the input file (.txt): first column ("V1") is treatment directory where kallisto results where saved; second column (V2) sample directory that kallisto generated for each sample. It could be customized, depends on the directory hierarchy.
 samples
 #colnames(samples) <-c("sample")
 
@@ -60,7 +67,7 @@ samples
 ```{r}
 # SET THE INPUT OF SAMPLE FILES
 
-setwd("//jic-hpc-data/HPC-Home/rna-training/kallisto/results/") # Pathway to the directory where kallisto files are stored
+setwd("//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/pseudoalignment-kallisto/REGALLO_CS_reference/") # Pathway to the directory where kallisto files are stored
 files <- file.path(samples$V1, samples$V2, "abundance.tsv", fsep = "/") # Creates the path to each file. By default kallisto output generates a file called "abundance.tsv" for each sample.
 files
 names(files) <- paste0(samples$V2)
@@ -71,6 +78,7 @@ all(file.exists(files)) # Should be TRUE, if FALSE something is missing
 
 txi <- tximport(files, type = "kallisto", tx2gene = tx2gene)
 names(txi)
+
 ```
 
 ```{r}
@@ -90,11 +98,12 @@ View(txi$abundance)
 ```{r}
 # SAVE THE TXIMPORT RESULTS
 
-setwd("//jic-hpc-data/HPC-Home/rna-training/R/tximport") # Move to the directory where the analysis will be saved
+setwd("//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/tximport/REGALLO_CS_reference/REGALLO_WW/") # Move to the directory where the analysis will be saved
 
-write.table(txi$counts, file="treatment_training_counts.tsv",sep = "\t") # Save the counts per gene. file = file name, ended with .tsv extension; "\t" = to be separated by tabulation
+write.table(txi$counts, file="REGALLO_WW_counts.tsv",sep = "\t") # Save the counts per gene. file = file name, ended with .tsv extension; "\t" = to be separated by tabulation
 
-write.table(txi$abundance, file="treatment_training_tpm.tsv",sep = "\t") # Save the tpm per gene
+write.table(txi$abundance, file="REGALLO_WW_tpm.tsv",sep = "\t") # Save the tpm per gene
+
 ```
 
 ### STEP 3. SUMMARISE LENGHT PER GENE ###
@@ -116,7 +125,7 @@ head(gene_lengths)
 View(gene_lengths)
 
 # SAVE LENGTH PER GENE RESULTS
-setwd("//jic-hpc-data/HPC-Home/rna-training/R/tximport")
-write.csv(gene_lengths, file = "treatment_training_gene_length.csv")
+setwd("//jic-hpc-data/Group-Scratch/Philippa-Borrill/Ismael/tximport/REGALLO_CS_reference/REGALLO_WW/")
+write.csv(gene_lengths, file = "REGALLO_WW_gene_length.csv")
 
 ```
